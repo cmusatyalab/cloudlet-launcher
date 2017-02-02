@@ -16,22 +16,12 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-
-import de.blinkt.openvpn.api.IOpenVPNAPIService;
-import de.blinkt.openvpn.api.IOpenVPNStatusCallback;
+import edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletService;
+import edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletServiceCallback;
 
 public class MainActivity extends Activity {
 
     private static final String LOG_TAG = "MainActivity";
-
-    private String cloudletIP = "128.2.213.25";
-
-    // Consts
-    private static final int CONST_OPENVPN_PERMISSION = 0;
 
     // Message types
     private static final int MSG_STATUS = 0;
@@ -42,8 +32,8 @@ public class MainActivity extends Activity {
     Button buttonConnectVPN;
     Button buttonDisconnectVPN;
 
-    // OpenVPN connection
-    private IOpenVPNAPIService mService = null;
+    // Service for cloudlet functionalities
+    private ICloudletService mCloudletService = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,19 +50,17 @@ public class MainActivity extends Activity {
         buttonFindCloudlet = (Button) findViewById(R.id.button_find_cloudlet);
         buttonConnectVPN = (Button) findViewById(R.id.button_connect_VPN);
         buttonDisconnectVPN = (Button) findViewById(R.id.button_disconnect_VPN);
+
+        // Bind to the Cloudlet service
+        Intent intentCloudletService = new Intent(this, CloudletService.class);
+        intentCloudletService.setAction(ICloudletService.class.getName());
+        bindService(intentCloudletService, mConnection, Context.BIND_AUTO_CREATE);
     }
 
     @Override
     protected void onResume() {
         Log.v(LOG_TAG, "++onResume");
         super.onResume();
-
-        // Bind to the OpenVPN service
-        Intent intentVPNService = new Intent(IOpenVPNAPIService.class.getName());
-        Log.i(LOG_TAG, IOpenVPNAPIService.class.getName());
-        intentVPNService.setPackage("de.blinkt.openvpn");
-
-        bindService(intentVPNService, mConnection, Context.BIND_AUTO_CREATE);
     }
 
     @Override
@@ -83,45 +71,37 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (mCloudletService != null) {
+            try {
+                mCloudletService.unregisterCallback(mCallback);
+            } catch (RemoteException e) {}
+        }
+        unbindService(mConnection);
+
         Log.v(LOG_TAG, "++onDestroy");
         super.onDestroy();
-
-        unbindService(mConnection);
     }
 
 
     /***** Begin handling button events ***************************************/
     // Called when the "find_cloulet" button is clicked
     public void findCloudlet(View view) {
-        cloudletIP = "128.2.213.25";
-        textStatus.setText("Cloudlet found:" + cloudletIP);
+        if (mCloudletService != null) {
+            try {
+                String cloudletIP = mCloudletService.findCloudlet();
+                textStatus.setText("Cloudlet found:" + cloudletIP);
+            } catch (RemoteException e) {
+                Log.e(LOG_TAG, "Error in getting cloudlet IP");
+            }
+        }
     }
 
     // Called when the "connect_VPN" button is clicked
     public void connectVPN(View view) {
-        // load client configuration file for OpenVPN
-        String configStr = "";
-        try {
-            InputStream conf = getApplicationContext().getAssets().open("test.conf");
-            InputStreamReader isr = new InputStreamReader(conf);
-            BufferedReader br = new BufferedReader(isr);
-            String line;
-            while(true) {
-                line = br.readLine();
-                if(line == null)
-                    break;
-                configStr += line + "\n";
-            }
-            br.readLine();
-        } catch (IOException e) {
-            Log.e(LOG_TAG, "Error reading .conf file");
-        }
-
         // Start connection
-        if (mService != null) {
+        if (mCloudletService != null) {
             try {
-                mService.addNewVPNProfile("test_launcher", true, configStr); // true allows user to edit
-                mService.startVPN(configStr);
+                mCloudletService.connectVPN();
             } catch (RemoteException e) {
                 Log.e(LOG_TAG, "Error in starting VPN connection");
             }
@@ -130,9 +110,9 @@ public class MainActivity extends Activity {
 
     // Called when the "disconnect_VPN" button is clicked
     public void disconnectVPN(View view) {
-        if (mService != null) {
+        if (mCloudletService != null) {
             try {
-                mService.disconnect();
+                mCloudletService.disconnectVPN();
             } catch (RemoteException e) {
                 Log.e(LOG_TAG, "Error in disconnecting VPN service");
             }
@@ -140,15 +120,13 @@ public class MainActivity extends Activity {
     }
     /***** End handling button events *****************************************/
 
-
-    /***** Begin handling connection to OpenVPN service ***********************/
-    private IOpenVPNStatusCallback mCallback = new IOpenVPNStatusCallback.Stub() {
+    /***** Begin handling connection to cloudlet service **********************/
+    private ICloudletServiceCallback mCallback = new ICloudletServiceCallback.Stub() {
         @Override
-        public void newStatus(String uuid, String state, String message, String level)
-                throws RemoteException {
+        public void message(String message) throws RemoteException {
             Message msg = Message.obtain();
             msg.what = MSG_STATUS;
-            msg.obj = state + "|" + message;
+            msg.obj = message;
             mHandler.sendMessage(msg);
         }
     };
@@ -156,40 +134,22 @@ public class MainActivity extends Activity {
     private ServiceConnection mConnection = new ServiceConnection() {
         public void onServiceConnected(ComponentName className, IBinder service) {
             // This is called when the connection with the service has been established
-            mService = IOpenVPNAPIService.Stub.asInterface(service);
+            Log.i(LOG_TAG, "Connection to cloudlet service established");
+            mCloudletService = ICloudletService.Stub.asInterface(service);
             try {
-                // Request permission to use the API
-                Intent i = mService.prepare(getApplicationContext().getPackageName());
-                if (i != null) {
-                    startActivityForResult(i, CONST_OPENVPN_PERMISSION);
-                } else {
-                    onActivityResult(CONST_OPENVPN_PERMISSION, Activity.RESULT_OK, null);
-                }
-
-            } catch (RemoteException e) {}
+                mCloudletService.registerCallback(mCallback);
+            } catch (RemoteException e) {
+                Log.e(LOG_TAG, "Error in registering callback to cloudlet service");
+            }
         }
 
         public void onServiceDisconnected(ComponentName className) {
             // This is called when the connection with the service has been
             // unexpectedly disconnected -- that is, its process crashed.
-            mService = null;
+            mCloudletService = null;
         }
     };
-    /***** End handling connection to OpenVPN service *************************/
-
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (resultCode == Activity.RESULT_OK) {
-            if(requestCode == CONST_OPENVPN_PERMISSION) {
-                try {
-                    mService.registerStatusCallback(mCallback);
-                } catch (RemoteException e) {
-                    Log.e(LOG_TAG, "Error in registering callback to OpenVPN service");
-                }
-            }
-        }
-    };
+    /***** End handling connection to cloudlet service ************************/
 
     private Handler mHandler = new Handler() {
         public void handleMessage(Message msg) {

@@ -52,8 +52,8 @@ public class MainActivity extends Activity {
         buttonDisconnectVPN = (Button) findViewById(R.id.button_disconnect_VPN);
 
         // Bind to the Cloudlet service
-        Intent intentCloudletService = new Intent(this, CloudletService.class);
-        intentCloudletService.setAction(ICloudletService.class.getName());
+        Intent intentCloudletService = new Intent(ICloudletService.class.getName());
+        intentCloudletService.setPackage("edu.cmu.cs.elijah.cloudletlauncher");
         bindService(intentCloudletService, mConnection, Context.BIND_AUTO_CREATE);
     }
 

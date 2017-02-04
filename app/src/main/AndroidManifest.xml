@@ -19,7 +19,11 @@
         <service
             android:name=".CloudletService"
             android:enabled="true"
-            android:exported="true"></service>
+            android:exported="true">
+            <intent-filter>
+                <action android:name="edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

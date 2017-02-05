@@ -23,7 +23,7 @@ import edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletServiceCallback;
 public class CloudletService extends Service {
     private static final String LOG_TAG = "CloudletService";
 
-    private String cloudletIP = "128.2.213.25";
+    private String cloudletIP = "172.17.0.2";
 
     // Consts
     private static final int CONST_OPENVPN_PERMISSION = 0;
@@ -68,11 +68,7 @@ public class CloudletService extends Service {
     }
 
     private final ICloudletService.Stub mBinder = new ICloudletService.Stub() {
-        public String findCloudlet() {
-            return cloudletIP;
-        };
-
-        public void connectVPN() {
+        public void findCloudlet() {
             // load client configuration file for OpenVPN
             String configStr = "";
             try {
@@ -94,7 +90,7 @@ public class CloudletService extends Service {
             // Start connection
             if (mVPNService != null) {
                 try {
-                    mVPNService.addNewVPNProfile("test_launcher", true, configStr); // true allows user to edit
+                    //mVPNService.addNewVPNProfile("test_launcher", true, configStr); // true allows user to edit
                     mVPNService.startVPN(configStr);
                 } catch (RemoteException e) {
                     Log.e(LOG_TAG, "Error in starting VPN connection");
@@ -102,7 +98,7 @@ public class CloudletService extends Service {
             }
         };
 
-        public void disconnectVPN() {
+        public void disconnectCloudlet() {
             if (mVPNService != null) {
                 try {
                     mVPNService.disconnect();
@@ -129,11 +125,15 @@ public class CloudletService extends Service {
         @Override
         public void newStatus(String uuid, String state, String message, String level)
                 throws RemoteException {
+            Log.d(LOG_TAG, state + "|" + message);
             int n = callbackList.beginBroadcast();
             for(int i = 0; i < n; i++)
             {
                 try {
                     callbackList.getBroadcastItem(i).message(state + "|" + message);
+                    if (state.equals("CONNECTED")) {
+                        callbackList.getBroadcastItem(i).newServerIP(cloudletIP);
+                    }
                 } catch (RemoteException e) {
                     // RemoteCallbackList will take care of removing dead objects
                 }

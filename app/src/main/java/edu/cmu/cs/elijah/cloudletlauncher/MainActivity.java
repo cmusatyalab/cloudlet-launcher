@@ -29,8 +29,7 @@ public class MainActivity extends Activity {
     // Views
     TextView textStatus;
     Button buttonFindCloudlet;
-    Button buttonConnectVPN;
-    Button buttonDisconnectVPN;
+    Button buttonDisconnectCloudlet;
 
     // Service for cloudlet functionalities
     private ICloudletService mCloudletService = null;
@@ -48,8 +47,13 @@ public class MainActivity extends Activity {
         // Get views
         textStatus = (TextView) findViewById(R.id.text_status);
         buttonFindCloudlet = (Button) findViewById(R.id.button_find_cloudlet);
-        buttonConnectVPN = (Button) findViewById(R.id.button_connect_VPN);
-        buttonDisconnectVPN = (Button) findViewById(R.id.button_disconnect_VPN);
+        buttonDisconnectCloudlet = (Button) findViewById(R.id.button_disconnect_cloudlet);
+    }
+
+    @Override
+    protected void onResume() {
+        Log.v(LOG_TAG, "++onResume");
+        super.onResume();
 
         // Bind to the Cloudlet service
         Intent intentCloudletService = new Intent(ICloudletService.class.getName());
@@ -58,61 +62,43 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onResume() {
-        Log.v(LOG_TAG, "++onResume");
-        super.onResume();
-    }
-
-    @Override
     protected void onPause() {
+        if (mCloudletService != null) {
+            try {
+                mCloudletService.disconnectCloudlet();
+                mCloudletService.unregisterCallback(mCallback);
+            } catch (RemoteException e) {}
+        }
+        unbindService(mConnection);
+
         Log.v(LOG_TAG, "++onPause");
         super.onDestroy();
     }
 
     @Override
     protected void onDestroy() {
-        if (mCloudletService != null) {
-            try {
-                mCloudletService.unregisterCallback(mCallback);
-            } catch (RemoteException e) {}
-        }
-        unbindService(mConnection);
-
         Log.v(LOG_TAG, "++onDestroy");
         super.onDestroy();
     }
 
 
     /***** Begin handling button events ***************************************/
-    // Called when the "find_cloulet" button is clicked
+    // Called when the "find_cloudlet" button is clicked
     public void findCloudlet(View view) {
         if (mCloudletService != null) {
             try {
-                String cloudletIP = mCloudletService.findCloudlet();
-                textStatus.setText("Cloudlet found:" + cloudletIP);
+                mCloudletService.findCloudlet();
             } catch (RemoteException e) {
                 Log.e(LOG_TAG, "Error in getting cloudlet IP");
             }
         }
     }
 
-    // Called when the "connect_VPN" button is clicked
-    public void connectVPN(View view) {
-        // Start connection
+    // Called when the "disconnect_from_cloudlet" button is clicked
+    public void disconnectCloudlet(View view) {
         if (mCloudletService != null) {
             try {
-                mCloudletService.connectVPN();
-            } catch (RemoteException e) {
-                Log.e(LOG_TAG, "Error in starting VPN connection");
-            }
-        }
-    }
-
-    // Called when the "disconnect_VPN" button is clicked
-    public void disconnectVPN(View view) {
-        if (mCloudletService != null) {
-            try {
-                mCloudletService.disconnectVPN();
+                mCloudletService.disconnectCloudlet();
             } catch (RemoteException e) {
                 Log.e(LOG_TAG, "Error in disconnecting VPN service");
             }
@@ -122,11 +108,16 @@ public class MainActivity extends Activity {
 
     /***** Begin handling connection to cloudlet service **********************/
     private ICloudletServiceCallback mCallback = new ICloudletServiceCallback.Stub() {
-        @Override
         public void message(String message) throws RemoteException {
             Message msg = Message.obtain();
             msg.what = MSG_STATUS;
             msg.obj = message;
+            mHandler.sendMessage(msg);
+        }
+        public void newServerIP(String IP_addr) throws RemoteException {
+            Message msg = Message.obtain();
+            msg.what = MSG_STATUS;
+            msg.obj = "New server IP:" + IP_addr;
             mHandler.sendMessage(msg);
         }
     };

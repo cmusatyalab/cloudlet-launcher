@@ -4,11 +4,9 @@ package edu.cmu.cs.elijah.cloudletlauncher.api;
 import edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletServiceCallback;
 
 interface ICloudletService {
-    String findCloudlet();
+    void findCloudlet();
 
-    void connectVPN();
-
-    void disconnectVPN();
+    void disconnectCloudlet();
 
     void registerCallback(ICloudletServiceCallback callback);
 

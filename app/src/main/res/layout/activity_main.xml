@@ -28,19 +28,11 @@
         android:onClick="findCloudlet"/>
 
     <Button
-        android:id="@+id/button_connect_VPN"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="15dp"
-        android:text="@string/connect_VPN"
-        android:onClick="connectVPN"/>
-
-    <Button
-        android:id="@+id/button_disconnect_VPN"
+        android:id="@+id/button_disconnect_cloudlet"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="15dp"
         android:text="@string/disconnect_VPN"
-        android:onClick="disconnectVPN"/>
+        android:onClick="disconnectCloudlet"/>
 
 </LinearLayout>

@@ -94,7 +94,7 @@ public class CloudletService extends Service {
 
     private final ICloudletService.Stub mBinder = new ICloudletService.Stub() {
         public void findCloudlet() {
-            new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort);
+            new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "create");
         };
 
         public void disconnectCloudlet() {
@@ -105,6 +105,7 @@ public class CloudletService extends Service {
                     Log.e(LOG_TAG, "Error in disconnecting VPN service: " + e.getMessage());
                 }
             }
+            new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "delete");
         };
 
         public void registerCallback(ICloudletServiceCallback cb) {
@@ -123,6 +124,7 @@ public class CloudletService extends Service {
     private String sendPostRequest(String... paras) {
         try {
             URL url = new URL(paras[0]); // here is your URL path
+            String action = paras[1];
 
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setReadTimeout(15000 /* milliseconds */);
@@ -132,7 +134,8 @@ public class CloudletService extends Service {
 
             Uri.Builder builder = new Uri.Builder()
                     .appendQueryParameter("user_id", userID)
-                    .appendQueryParameter("app_id", appID);
+                    .appendQueryParameter("app_id", appID)
+                    .appendQueryParameter("action", action);
             String query = builder.build().getEncodedQuery();
 
             OutputStream os = conn.getOutputStream();
@@ -154,17 +157,26 @@ public class CloudletService extends Service {
         }
         return null;
     }
-    public class SendPostRequestAsync extends AsyncTask<String, Void, String> {
-
-        protected String doInBackground(String... paras) {
-            return sendPostRequest(paras);
+    private class ParaWrapper
+    {
+        public String response;
+        public String action;
+    }
+    public class SendPostRequestAsync extends AsyncTask<String, Void, ParaWrapper> {
+        @Override
+        protected ParaWrapper doInBackground(String... paras) {
+            ParaWrapper p = new ParaWrapper();
+            p.response = sendPostRequest(paras);
+            p.action = paras[1];
+            return p;
         }
 
         @Override
-        protected void onPostExecute(String result) {
-            if (result != null) {
+        protected void onPostExecute(ParaWrapper p) {
+            if (p.response != null) {
                 Message msg = Message.obtain();
                 msg.what = MSG_POST_DONE;
+                msg.obj = p.action;
                 mHandler.sendMessage(msg);
             }
         }
@@ -303,20 +315,23 @@ public class CloudletService extends Service {
     private Handler mHandler = new Handler() {
         public void handleMessage(Message msg) {
             if (msg.what == MSG_POST_DONE) {
-                final Timer pollingTimer = new Timer();
-                TimerTask pollingTask = new TimerTask() {
-                    @Override
-                    public void run() {
-                        String response = sendGetRequest("http://" + cloudletIP + ":" + cloudletPort + "?user_id=" + userID + "&app_id=" + appID);
-                        Log.d(LOG_TAG, response);
-                        if (response != null && !response.equals("None")) {
-                            pollingTimer.cancel();
-                            vmIP = response;
-                            connectVPN();
+                String action = (String) msg.obj;
+                if (action.equals("create")) {
+                    final Timer pollingTimer = new Timer();
+                    TimerTask pollingTask = new TimerTask() {
+                        @Override
+                        public void run() {
+                            String response = sendGetRequest("http://" + cloudletIP + ":" + cloudletPort + "?user_id=" + userID + "&app_id=" + appID);
+                            Log.d(LOG_TAG, response);
+                            if (response != null && !response.equals("None")) {
+                                pollingTimer.cancel();
+                                vmIP = response;
+                                connectVPN();
+                            }
                         }
-                    }
-                };
-                pollingTimer.schedule(pollingTask, 10000, 3000);
+                    };
+                    pollingTimer.schedule(pollingTask, 10000, 3000);
+                }
             }
         }
     };

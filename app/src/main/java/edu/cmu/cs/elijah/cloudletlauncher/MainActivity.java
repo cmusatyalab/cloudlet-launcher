@@ -16,6 +16,7 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 
+import de.blinkt.openvpn.api.IOpenVPNAPIService;
 import edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletService;
 import edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletServiceCallback;
 
@@ -23,8 +24,15 @@ public class MainActivity extends Activity {
 
     private static final String LOG_TAG = "MainActivity";
 
+    // Application ID
+    private final String appId = "test";
+
     // Message types
     private static final int MSG_STATUS = 0;
+
+    // Consts
+    private static final int CONST_OPENVPN_PERMISSION = 0;
+    private static final int CONST_OPENVPN_PERMISSION2 = 1;
 
     // Views
     TextView textStatus;
@@ -33,6 +41,9 @@ public class MainActivity extends Activity {
 
     // Service for cloudlet functionalities
     private ICloudletService mCloudletService = null;
+
+    // Service for OpenVPN client control; used only for registering app
+    private IOpenVPNAPIService mVpnService = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,18 +69,18 @@ public class MainActivity extends Activity {
         // Bind to the Cloudlet service
         Intent intentCloudletService = new Intent(ICloudletService.class.getName());
         intentCloudletService.setPackage("edu.cmu.cs.elijah.cloudletlauncher");
-        bindService(intentCloudletService, mConnection, Context.BIND_AUTO_CREATE);
+        bindService(intentCloudletService, mCloudletConnection, Context.BIND_AUTO_CREATE);
     }
 
     @Override
     protected void onPause() {
         if (mCloudletService != null) {
             try {
-                mCloudletService.disconnectCloudlet();
+                mCloudletService.disconnectCloudlet(appId);
                 mCloudletService.unregisterCallback(mCallback);
             } catch (RemoteException e) {}
         }
-        unbindService(mConnection);
+        unbindService(mCloudletConnection);
 
         Log.v(LOG_TAG, "++onPause");
         super.onDestroy();
@@ -83,11 +94,32 @@ public class MainActivity extends Activity {
 
 
     /***** Begin handling button events ***************************************/
+    // Called when the "register_to_openvpn" button is clicked
+    public void registerOpenVpn(View view) {
+        // Bind to the OpenVPN service
+        Intent intentVpnService = new Intent(IOpenVPNAPIService.class.getName());
+        Log.i(LOG_TAG, IOpenVPNAPIService.class.getName());
+        intentVpnService.setPackage("de.blinkt.openvpn");
+
+        bindService(intentVpnService, mVpnConnection, Context.BIND_AUTO_CREATE);
+    }
+
+    // Called when the "test_openvpn" button is clicked
+    public void testOpenVpn(View view) {
+        if (mCloudletService != null) {
+            try {
+                mCloudletService.testOpenVpn();
+            } catch (RemoteException e) {
+                Log.e(LOG_TAG, "Error in getting cloudlet IP");
+            }
+        }
+    }
+
     // Called when the "find_cloudlet" button is clicked
     public void findCloudlet(View view) {
         if (mCloudletService != null) {
             try {
-                mCloudletService.findCloudlet();
+                mCloudletService.findCloudlet(appId);
             } catch (RemoteException e) {
                 Log.e(LOG_TAG, "Error in getting cloudlet IP");
             }
@@ -98,7 +130,7 @@ public class MainActivity extends Activity {
     public void disconnectCloudlet(View view) {
         if (mCloudletService != null) {
             try {
-                mCloudletService.disconnectCloudlet();
+                mCloudletService.disconnectCloudlet(appId);
             } catch (RemoteException e) {
                 Log.e(LOG_TAG, "Error in disconnecting VPN service");
             }
@@ -122,7 +154,7 @@ public class MainActivity extends Activity {
         }
     };
 
-    private ServiceConnection mConnection = new ServiceConnection() {
+    private ServiceConnection mCloudletConnection = new ServiceConnection() {
         public void onServiceConnected(ComponentName className, IBinder service) {
             // This is called when the connection with the service has been established
             Log.i(LOG_TAG, "Connection to cloudlet service established");
@@ -141,6 +173,62 @@ public class MainActivity extends Activity {
         }
     };
     /***** End handling connection to cloudlet service ************************/
+
+    private ServiceConnection mVpnConnection = new ServiceConnection() {
+        public void onServiceConnected(ComponentName className, IBinder service) {
+            // This is called when the connection with the service has been established
+            mVpnService = IOpenVPNAPIService.Stub.asInterface(service);
+
+            // Request permission to use the API
+            // Don't understand what's the difference between the two
+            try {
+                Intent i = mVpnService.prepare(getApplicationContext().getPackageName());
+                if (i != null) {
+                    startActivityForResult(i, CONST_OPENVPN_PERMISSION);
+                } else {
+                    onActivityResult(CONST_OPENVPN_PERMISSION, Activity.RESULT_OK, null);
+                }
+            } catch (RemoteException e) {
+                Log.e(LOG_TAG, "Error in VPN service call 'prepare'");
+            }
+        }
+
+        public void onServiceDisconnected(ComponentName className) {
+            // This is called when the connection with the service has been
+            // unexpectedly disconnected -- that is, its process crashed.
+            mVpnService = null;
+        }
+    };
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if(requestCode == CONST_OPENVPN_PERMISSION) {
+            if (resultCode == Activity.RESULT_OK) {
+                try {
+                    Intent i = mVpnService.prepareVPNService();
+                    if (i != null) {
+                        startActivityForResult(i, CONST_OPENVPN_PERMISSION2);
+                    } else {
+                        onActivityResult(CONST_OPENVPN_PERMISSION2, Activity.RESULT_OK, null);
+                    }
+                } catch (RemoteException e) {
+                    Log.e(LOG_TAG, "Error in VPN service call 'prepareVPNService'");
+                }
+
+                Message msg = Message.obtain();
+                msg.what = MSG_STATUS;
+                msg.obj = "Cloudlet Launcher successfully gained control over OpenVPN client";
+                mHandler.sendMessage(msg);
+            } else {
+                Log.w(LOG_TAG, "The user hasn't permitted this app to control OpenVPN client");
+
+                Message msg = Message.obtain();
+                msg.what = MSG_STATUS;
+                msg.obj = "Cloudlet Launcher failed to gain control over OpenVPN client";
+                mHandler.sendMessage(msg);
+            }
+        }
+    };
 
     private Handler mHandler = new Handler() {
         public void handleMessage(Message msg) {

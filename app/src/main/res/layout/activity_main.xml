@@ -20,6 +20,22 @@
         android:text="@string/status_default" />
 
     <Button
+        android:id="@+id/register_to_openvpn"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="15dp"
+        android:text="@string/register_to_openvpn"
+        android:onClick="registerOpenVpn"/>
+
+    <Button
+        android:id="@+id/test_openvpn"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="15dp"
+        android:text="@string/test_openvpn"
+        android:onClick="testOpenVpn"/>
+
+    <Button
         android:id="@+id/button_find_cloudlet"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"

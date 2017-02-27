@@ -107,20 +107,29 @@ public class CloudletService extends Service {
     }
 
     private final ICloudletService.Stub mBinder = new ICloudletService.Stub() {
-        public void testOpenVpn() {
+        public void startOpenVpn() {
             if (checkVpnService()) {
                 isTesting = true;
                 connectVpn();
             }
         }
 
+        public void endOpenVpn() {
+            if (checkVpnService()) {
+                isTesting = false;
+                disconnectVpn();
+            }
+        }
+
         public void findCloudlet(String appId) {
+            Log.d(LOG_TAG, "findCloudlet called");
             if (checkVpnService()) {
                 new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "create", appId, userId);
             }
         };
 
         public void disconnectCloudlet(String appId) {
+            Log.d(LOG_TAG, "disconnectCloudlet called");
             if (checkVpnService()) {
                 disconnectVpn();
                 new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "delete", appId, userId);
@@ -392,11 +401,8 @@ public class CloudletService extends Service {
             }
             if (msg.what == MSG_VPN_CONNECTED) {
                 if (isTesting) {
-                    try {
-                        Thread.sleep(3000);
-                    } catch (InterruptedException e) {}
-                    disconnectVpn();
-                    isTesting = false;
+                    Log.d(LOG_TAG, "Not broadcasting new IP because running in testing mode.");
+                    // do nothing
                 } else {
                     int n = callbackList.beginBroadcast();
                     for (int i = 0; i < n; i++) {

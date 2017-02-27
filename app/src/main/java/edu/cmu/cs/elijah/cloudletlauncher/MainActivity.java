@@ -59,12 +59,6 @@ public class MainActivity extends Activity {
         textStatus = (TextView) findViewById(R.id.text_status);
         buttonFindCloudlet = (Button) findViewById(R.id.button_find_cloudlet);
         buttonDisconnectCloudlet = (Button) findViewById(R.id.button_disconnect_cloudlet);
-    }
-
-    @Override
-    protected void onResume() {
-        Log.v(LOG_TAG, "++onResume");
-        super.onResume();
 
         // Bind to the Cloudlet service
         Intent intentCloudletService = new Intent(ICloudletService.class.getName());
@@ -73,7 +67,19 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        Log.v(LOG_TAG, "++onResume");
+        super.onResume();
+    }
+
+    @Override
     protected void onPause() {
+        Log.v(LOG_TAG, "++onPause");
+        super.onDestroy();
+    }
+
+    @Override
+    protected void onDestroy() {
         if (mCloudletService != null) {
             try {
                 mCloudletService.disconnectCloudlet(appId);
@@ -82,12 +88,6 @@ public class MainActivity extends Activity {
         }
         unbindService(mCloudletConnection);
 
-        Log.v(LOG_TAG, "++onPause");
-        super.onDestroy();
-    }
-
-    @Override
-    protected void onDestroy() {
         Log.v(LOG_TAG, "++onDestroy");
         super.onDestroy();
     }
@@ -104,11 +104,22 @@ public class MainActivity extends Activity {
         bindService(intentVpnService, mVpnConnection, Context.BIND_AUTO_CREATE);
     }
 
-    // Called when the "test_openvpn" button is clicked
-    public void testOpenVpn(View view) {
+    // Called when the "start_openvpn" button is clicked
+    public void startOpenVpn(View view) {
         if (mCloudletService != null) {
             try {
-                mCloudletService.testOpenVpn();
+                mCloudletService.startOpenVpn();
+            } catch (RemoteException e) {
+                Log.e(LOG_TAG, "Error in getting cloudlet IP");
+            }
+        }
+    }
+
+    // Called when the "end_openvpn" button is clicked
+    public void endOpenVpn(View view) {
+        if (mCloudletService != null) {
+            try {
+                mCloudletService.endOpenVpn();
             } catch (RemoteException e) {
                 Log.e(LOG_TAG, "Error in getting cloudlet IP");
             }

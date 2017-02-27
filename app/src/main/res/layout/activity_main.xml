@@ -27,13 +27,31 @@
         android:text="@string/register_to_openvpn"
         android:onClick="registerOpenVpn"/>
 
-    <Button
-        android:id="@+id/test_openvpn"
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:tools="http://schemas.android.com/tools"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="15dp"
-        android:text="@string/test_openvpn"
-        android:onClick="testOpenVpn"/>
+        android:orientation="horizontal"
+        android:weightSum="1">
+
+        <Button
+            android:id="@+id/start_openvpn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.5"
+            android:text="@string/start_openvpn"
+            android:onClick="startOpenVpn"/>
+
+        <Button
+            android:id="@+id/end_openvpn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.5"
+            android:text="@string/end_openvpn"
+            android:onClick="endOpenVpn"/>
+
+    </LinearLayout>
 
     <Button
         android:id="@+id/button_find_cloudlet"

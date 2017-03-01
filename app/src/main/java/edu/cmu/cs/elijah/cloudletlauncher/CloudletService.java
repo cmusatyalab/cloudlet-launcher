@@ -55,6 +55,8 @@ public class CloudletService extends Service {
     // OpenVPN connection
     private IOpenVPNAPIService mVpnService = null;
     private boolean isVpnServiceReady = false;
+    private Object vpnLock = new Object();
+    private int vpnConnectionCounter = 0;
 
     // Callbacks
     private final RemoteCallbackList<ICloudletServiceCallback> callbackList = new RemoteCallbackList<ICloudletServiceCallback>();
@@ -122,14 +124,14 @@ public class CloudletService extends Service {
         }
 
         public void findCloudlet(String appId) {
-            Log.d(LOG_TAG, "findCloudlet called");
+            Log.d(LOG_TAG, "++findCloudlet");
             if (checkVpnService()) {
                 new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "create", appId, userId);
             }
         };
 
         public void disconnectCloudlet(String appId) {
-            Log.d(LOG_TAG, "disconnectCloudlet called");
+            Log.d(LOG_TAG, "++disconnectCloudlet");
             if (checkVpnService()) {
                 disconnectVpn();
                 new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "delete", appId, userId);
@@ -280,44 +282,79 @@ public class CloudletService extends Service {
 
     /***** Begin handling connection to OpenVPN service *******************************************/
     private void connectVpn() {
-        // load client configuration file for OpenVPN
-        String configStr = "";
-        try {
-            //InputStream conf = getApplicationContext().getAssets().open("test.conf");
-            //BufferedReader reader = new BufferedReader(new InputStreamReader(conf));
-            File confFile = new File(Environment.getExternalStorageDirectory(), "/CloudletLauncher/OpenVPN_client.conf");
-            BufferedReader reader = new BufferedReader(new FileReader(confFile));
+        Log.d(LOG_TAG, "++connectVpn");
 
-            String line;
-            while(true) {
-                line = reader.readLine();
-                if(line == null)
-                    break;
-                configStr += line + "\n";
+        synchronized(vpnLock) {
+            // Check if VPN states are normal
+            if (vpnConnectionCounter < 0) {
+                Log.d(LOG_TAG, "A 'disconnectVpn' has been called before 'connectVpn'");
+                vpnConnectionCounter++;
+                return;
             }
-            reader.readLine();
-        } catch (IOException e) {
-            Log.e(LOG_TAG, "Error reading .conf file: " + e.getMessage());
-        }
+            if (vpnConnectionCounter > 0) {
+                Log.d(LOG_TAG, "Multiple Vpn connections are requested");
+                vpnConnectionCounter++;
+                return;
+            }
 
-        // Start connection
-        if (mVpnService != null) {
+            vpnConnectionCounter++;
+
+            // Load client configuration file for OpenVPN
+            String configStr = "";
             try {
-                mVpnService.startVPN(configStr);
-            } catch (RemoteException e) {
-                Log.e(LOG_TAG, "Error in starting VPN connection: " + e.getMessage());
+                //InputStream conf = getApplicationContext().getAssets().open("test.conf");
+                //BufferedReader reader = new BufferedReader(new InputStreamReader(conf));
+                File confFile = new File(Environment.getExternalStorageDirectory(), "/CloudletLauncher/OpenVPN_client.conf");
+                BufferedReader reader = new BufferedReader(new FileReader(confFile));
+
+                String line;
+                while (true) {
+                    line = reader.readLine();
+                    if (line == null)
+                        break;
+                    configStr += line + "\n";
+                }
+                reader.readLine();
+            } catch (IOException e) {
+                Log.e(LOG_TAG, "Error reading .conf file: " + e.getMessage());
+            }
+
+            // Start connection
+            if (mVpnService != null) {
+                try {
+                    mVpnService.startVPN(configStr);
+                } catch (RemoteException e) {
+                    Log.e(LOG_TAG, "Error in starting VPN connection: " + e.getMessage());
+                }
             }
         }
     }
 
     private void disconnectVpn() {
-        if (mVpnService != null) {
-            try {
-                mVpnService.disconnect();
-            } catch (SecurityException e) {
-                Log.w(LOG_TAG, "The cloudletlauncher hasn't registered to OpenVPN client");
-            } catch (RemoteException e) {
-                Log.e(LOG_TAG, "Error in disconnecting VPN service: " + e.getMessage());
+        Log.d(LOG_TAG, "++disconnectVpn");
+
+        synchronized(vpnLock) {
+            if (vpnConnectionCounter <= 0) {
+                Log.d(LOG_TAG, "A 'disconnectVpn' is called before a connection");
+                vpnConnectionCounter--;
+                return;
+            }
+            if (vpnConnectionCounter > 1) {
+                Log.d(LOG_TAG, "More than two apps need Vpn connection, so just decrease the reference number without actually disconnecting");
+                vpnConnectionCounter--;
+                return;
+            }
+
+            vpnConnectionCounter--;
+
+            if (mVpnService != null) {
+                try {
+                    mVpnService.disconnect();
+                } catch (SecurityException e) {
+                    Log.w(LOG_TAG, "The cloudletlauncher hasn't registered to OpenVPN client");
+                } catch (RemoteException e) {
+                    Log.e(LOG_TAG, "Error in disconnecting VPN service: " + e.getMessage());
+                }
             }
         }
     }
@@ -434,8 +471,11 @@ public class CloudletService extends Service {
             String response = sendGetRequest("http://" + cloudletIP + ":" + cloudletPort + "?user_id=" + this.userId + "&app_id=" + this.appId);
             Log.d(LOG_TAG, response);
             if (response != null && !response.equals("None")) {
+                if (!response.equals("Error")) {
+                    Log.i(LOG_TAG, "Got cloudlet VM IP: " + response);
+                    vmIp = response;
+                }
                 this.timer.cancel();
-                vmIp = response;
                 connectVpn();
             }
         }

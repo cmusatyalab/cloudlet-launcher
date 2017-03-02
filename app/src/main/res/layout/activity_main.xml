@@ -16,49 +16,100 @@
         android:id="@+id/text_status"
         android:background="@drawable/rect"
         android:layout_width="fill_parent"
-        android:layout_height="200dp"
-        android:text="@string/status_default" />
+        android:layout_height="160dp"
+        android:text="@string/status_default"/>
 
-    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:tools="http://schemas.android.com/tools"
+    <CheckBox
+        android:id="@+id/checkbox_profile"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/checkbox_profile" />
+
+    <TextView
+        android:id="@+id/text_notify"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
+        android:textColor="#FF0000"
+        android:text=""/>
+
+
+    <LinearLayout
+        android:background="@drawable/rect_api"
+        android:layout_height="wrap_content"
+        android:layout_width="match_parent"
         android:layout_marginTop="15dp"
-        android:orientation="horizontal"
-        android:weightSum="1">
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:paddingLeft="5dp"
+        android:paddingRight="5dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/text_api"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:textSize="22sp"
+            android:text="@string/title_api"/>
 
         <Button
-            android:id="@+id/start_openvpn"
-            android:layout_width="0dp"
+            android:id="@+id/button_find_cloudlet"
+            android:layout_width="fill_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="0.5"
-            android:text="@string/start_openvpn"
-            android:onClick="startOpenVpn"/>
+            android:layout_marginTop="0dp"
+            android:text="@string/find_cloudlet"
+            android:onClick="findCloudlet"/>
 
         <Button
-            android:id="@+id/end_openvpn"
-            android:layout_width="0dp"
+            android:id="@+id/button_disconnect_cloudlet"
+            android:layout_width="fill_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="0.5"
-            android:text="@string/end_openvpn"
-            android:onClick="endOpenVpn"/>
+            android:layout_marginTop="10dp"
+            android:text="@string/disconnect_VPN"
+            android:onClick="disconnectCloudlet"/>
 
     </LinearLayout>
 
-    <Button
-        android:id="@+id/button_find_cloudlet"
-        android:layout_width="fill_parent"
+    <LinearLayout
+        android:background="@drawable/rect_debug"
         android:layout_height="wrap_content"
+        android:layout_width="match_parent"
         android:layout_marginTop="15dp"
-        android:text="@string/find_cloudlet"
-        android:onClick="findCloudlet"/>
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:paddingLeft="5dp"
+        android:paddingRight="5dp"
+        android:orientation="vertical">
 
-    <Button
-        android:id="@+id/button_disconnect_cloudlet"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="15dp"
-        android:text="@string/disconnect_VPN"
-        android:onClick="disconnectCloudlet"/>
+        <TextView
+            android:id="@+id/text_debug"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:textSize="22sp"
+            android:text="@string/title_debug"/>
+
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/start_openvpn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.5"
+                android:text="@string/start_openvpn"
+                android:onClick="startOpenVpn"/>
+
+            <Button
+                android:id="@+id/end_openvpn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.5"
+                android:text="@string/end_openvpn"
+                android:onClick="endOpenVpn"/>
+
+        </LinearLayout>
+    </LinearLayout>
 
 </LinearLayout>

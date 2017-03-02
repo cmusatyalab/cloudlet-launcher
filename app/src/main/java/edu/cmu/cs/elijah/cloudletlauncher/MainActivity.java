@@ -16,7 +16,11 @@ import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.TextView;
+
+import org.w3c.dom.Text;
 
 import de.blinkt.openvpn.api.IOpenVPNAPIService;
 import edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletService;
@@ -40,10 +44,13 @@ public class MainActivity extends Activity {
     TextView textStatus;
     Button buttonFindCloudlet;
     Button buttonDisconnectCloudlet;
+    CheckBox checkBoxProfile;
+    TextView textNotify;
 
     // Service for cloudlet functionalities
     private ICloudletService mCloudletService = null;
     private boolean isCloudletServiceConnected = false;
+    private String profileUuid;
 
     // Service for OpenVPN client control; used only for registering app
     private IOpenVPNAPIService mVpnService = null;
@@ -62,6 +69,18 @@ public class MainActivity extends Activity {
         textStatus = (TextView) findViewById(R.id.text_status);
         buttonFindCloudlet = (Button) findViewById(R.id.button_find_cloudlet);
         buttonDisconnectCloudlet = (Button) findViewById(R.id.button_disconnect_cloudlet);
+        checkBoxProfile = (CheckBox) findViewById(R.id.checkbox_profile);
+        textNotify = (TextView) findViewById(R.id.text_notify);
+
+        checkBoxProfile.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                updateProfileUuid();
+                try {
+                    mCloudletService.useTestProfile(isChecked);
+                } catch (RemoteException e) {}
+            }
+        });
     }
 
     @Override
@@ -95,7 +114,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (mCloudletService != null) {
             try {
-                mCloudletService.disconnectCloudlet(appId);
+                mCloudletService.endOpenVpn();
                 mCloudletService.unregisterCallback(mCallback);
             } catch (RemoteException e) {}
         }
@@ -177,6 +196,8 @@ public class MainActivity extends Activity {
             mCloudletService = ICloudletService.Stub.asInterface(service);
             try {
                 mCloudletService.registerCallback(mCallback);
+
+                updateProfileUuid();
             } catch (RemoteException e) {
                 Log.e(LOG_TAG, "Error in registering callback to cloudlet service");
             }
@@ -198,6 +219,18 @@ public class MainActivity extends Activity {
         } catch (PackageManager.NameNotFoundException e) {
             return false;
         }
+    }
+
+    private void updateProfileUuid() {
+        try {
+            profileUuid = mCloudletService.getVpnProfileUuid();
+            if (!checkBoxProfile.isChecked() && profileUuid == null) {
+                textNotify.setText("Please create a profile named \"cloudlet\" in OpenVPN first");
+                textNotify.setVisibility(View.VISIBLE);
+            } else {
+                textNotify.setVisibility(View.INVISIBLE);
+            }
+        } catch (RemoteException e) {}
     }
     /***** End helper functions *******************************************************************/
 

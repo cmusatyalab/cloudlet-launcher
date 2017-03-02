@@ -3,7 +3,12 @@
     <string name="hello_world">Hello world!</string>
 
     <string name="status_default">No cloudlet connection</string>
-    <string name="register_to_openvpn">Register to OpenVPN</string>
+
+    <string name="checkbox_profile">Use test OpenVPN profile</string>
+
+    <string name="title_api">Public APIs</string>
+    <string name="title_debug">Debug Only</string>
+
     <string name="start_openvpn">Start VPN</string>
     <string name="end_openvpn">End VPN</string>
     <string name="find_cloudlet">Find cloudlet</string>

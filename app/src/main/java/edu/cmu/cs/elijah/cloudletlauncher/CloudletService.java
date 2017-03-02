@@ -26,11 +26,13 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
 import javax.net.ssl.HttpsURLConnection;
 
+import de.blinkt.openvpn.api.APIVpnProfile;
 import de.blinkt.openvpn.api.IOpenVPNAPIService;
 import de.blinkt.openvpn.api.IOpenVPNStatusCallback;
 import edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletService;
@@ -57,6 +59,8 @@ public class CloudletService extends Service {
     private boolean isVpnServiceReady = false;
     private Object vpnLock = new Object();
     private int vpnConnectionCounter = 0;
+    private String profileUuid = null;
+    private boolean isUsingTestProfile = false;
 
     // Callbacks
     private final RemoteCallbackList<ICloudletServiceCallback> callbackList = new RemoteCallbackList<ICloudletServiceCallback>();
@@ -109,33 +113,46 @@ public class CloudletService extends Service {
     }
 
     private final ICloudletService.Stub mBinder = new ICloudletService.Stub() {
-        public void startOpenVpn() {
-            if (checkVpnService()) {
-                isTesting = true;
-                connectVpn();
+        public String getVpnProfileUuid() {
+            List<APIVpnProfile> profileList = null;
+            try {
+                profileList = mVpnService.getProfiles();
+            } catch (RemoteException e) {}
+
+            for (APIVpnProfile p : profileList) {
+                Log.d(LOG_TAG, "New profile item. UUID: " + p.mUUID + ", name: " + p.mName);
+                if (p.mName.equals("cloudlet")) return p.mUUID;
             }
+            return null;
+        }
+
+        public void useTestProfile(boolean flag) {
+            isUsingTestProfile = flag;
+        }
+
+        public void startOpenVpn() {
+            isTesting = true;
+            profileUuid = getVpnProfileUuid();
+            connectVpn();
         }
 
         public void endOpenVpn() {
-            if (checkVpnService()) {
-                isTesting = false;
-                disconnectVpn();
-            }
+            isTesting = false;
+            profileUuid = getVpnProfileUuid();
+            disconnectVpn();
         }
 
         public void findCloudlet(String appId) {
             Log.d(LOG_TAG, "++findCloudlet");
-            if (checkVpnService()) {
-                new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "create", appId, userId);
-            }
+            profileUuid = getVpnProfileUuid();
+            new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "create", appId, userId);
         };
 
         public void disconnectCloudlet(String appId) {
             Log.d(LOG_TAG, "++disconnectCloudlet");
-            if (checkVpnService()) {
-                disconnectVpn();
-                new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "delete", appId, userId);
-            }
+            profileUuid = getVpnProfileUuid();
+            disconnectVpn();
+            new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "delete", appId, userId);
         };
 
         public void registerCallback(ICloudletServiceCallback cb) {
@@ -299,32 +316,43 @@ public class CloudletService extends Service {
 
             vpnConnectionCounter++;
 
-            // Load client configuration file for OpenVPN
-            String configStr = "";
-            try {
-                //InputStream conf = getApplicationContext().getAssets().open("test.conf");
-                //BufferedReader reader = new BufferedReader(new InputStreamReader(conf));
-                File confFile = new File(Environment.getExternalStorageDirectory(), "/CloudletLauncher/OpenVPN_client.conf");
-                BufferedReader reader = new BufferedReader(new FileReader(confFile));
-
-                String line;
-                while (true) {
-                    line = reader.readLine();
-                    if (line == null)
-                        break;
-                    configStr += line + "\n";
-                }
-                reader.readLine();
-            } catch (IOException e) {
-                Log.e(LOG_TAG, "Error reading .conf file: " + e.getMessage());
-            }
-
-            // Start connection
-            if (mVpnService != null) {
+            if (isUsingTestProfile) {
+                // Load testing client configuration file for OpenVPN
+                String configStr = "";
                 try {
-                    mVpnService.startVPN(configStr);
-                } catch (RemoteException e) {
-                    Log.e(LOG_TAG, "Error in starting VPN connection: " + e.getMessage());
+                    InputStream conf = getApplicationContext().getAssets().open("test.conf");
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(conf));
+                    //File confFile = new File(Environment.getExternalStorageDirectory(), "/CloudletLauncher/OpenVPN_client.conf");
+                    //BufferedReader reader = new BufferedReader(new FileReader(confFile));
+
+                    String line;
+                    while (true) {
+                        line = reader.readLine();
+                        if (line == null)
+                            break;
+                        configStr += line + "\n";
+                    }
+                    reader.readLine();
+                } catch (IOException e) {
+                    Log.e(LOG_TAG, "Error reading .conf file: " + e.getMessage());
+                }
+
+                // Start connection using configuration file
+                if (mVpnService != null) {
+                    try {
+                        mVpnService.startVPN(configStr);
+                    } catch (RemoteException e) {
+                        Log.e(LOG_TAG, "Error in starting VPN connection: " + e.getMessage());
+                    }
+                }
+            } else {
+                // Start connection using pre-registered user profile
+                if (mVpnService != null) {
+                    try {
+                        mVpnService.startProfile(profileUuid);
+                    } catch (RemoteException e) {
+                        Log.e(LOG_TAG, "Error in starting VPN connection: " + e.getMessage());
+                    }
                 }
             }
         }

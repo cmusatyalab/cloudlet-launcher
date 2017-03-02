@@ -44,6 +44,7 @@ public class MainActivity extends Activity {
     TextView textStatus;
     Button buttonFindCloudlet;
     Button buttonDisconnectCloudlet;
+    Button buttonStartVpn, buttonEndVpn;
     CheckBox checkBoxProfile;
     TextView textNotify;
 
@@ -69,6 +70,8 @@ public class MainActivity extends Activity {
         textStatus = (TextView) findViewById(R.id.text_status);
         buttonFindCloudlet = (Button) findViewById(R.id.button_find_cloudlet);
         buttonDisconnectCloudlet = (Button) findViewById(R.id.button_disconnect_cloudlet);
+        buttonStartVpn = (Button) findViewById(R.id.button_start_vpn);
+        buttonEndVpn = (Button) findViewById(R.id.button_end_vpn);
         checkBoxProfile = (CheckBox) findViewById(R.id.checkbox_profile);
         textNotify = (TextView) findViewById(R.id.text_notify);
 
@@ -227,8 +230,18 @@ public class MainActivity extends Activity {
             if (!checkBoxProfile.isChecked() && profileUuid == null) {
                 textNotify.setText("Please create a profile named \"cloudlet\" in OpenVPN first");
                 textNotify.setVisibility(View.VISIBLE);
+
+                buttonFindCloudlet.setEnabled(false);
+                buttonDisconnectCloudlet.setEnabled(false);
+                buttonStartVpn.setEnabled(false);
+                buttonEndVpn.setEnabled(false);
             } else {
                 textNotify.setVisibility(View.INVISIBLE);
+
+                buttonFindCloudlet.setEnabled(true);
+                buttonDisconnectCloudlet.setEnabled(true);
+                buttonStartVpn.setEnabled(true);
+                buttonEndVpn.setEnabled(true);
             }
         } catch (RemoteException e) {}
     }
@@ -296,6 +309,8 @@ public class MainActivity extends Activity {
                     intentCloudletService.setPackage("edu.cmu.cs.elijah.cloudletlauncher");
                     bindService(intentCloudletService, mCloudletConnection, Context.BIND_AUTO_CREATE);
                     isCloudletServiceConnected = true;
+                } else {
+                    updateProfileUuid();
                 }
 
                 unbindService(mVpnConnection);

@@ -94,7 +94,7 @@
             android:orientation="horizontal">
 
             <Button
-                android:id="@+id/start_openvpn"
+                android:id="@+id/button_start_vpn"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="0.5"
@@ -102,7 +102,7 @@
                 android:onClick="startOpenVpn"/>
 
             <Button
-                android:id="@+id/end_openvpn"
+                android:id="@+id/button_end_vpn"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="0.5"

@@ -1,10 +1,13 @@
 package edu.cmu.cs.elijah.cloudletlauncher;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -12,15 +15,15 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.RemoteException;
+import android.text.InputType;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
+import android.widget.EditText;
 import android.widget.TextView;
-
-import org.w3c.dom.Text;
 
 import de.blinkt.openvpn.api.IOpenVPNAPIService;
 import edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletService;
@@ -33,28 +36,36 @@ public class MainActivity extends Activity {
     // Application ID
     private final String appId = "test";
 
+    // User ID
+    private String userId = "unknown";
+
     // Message types
     private static final int MSG_STATUS = 0;
+    private static final int MSG_READY = 1;
 
     // Consts
     private static final int CONST_OPENVPN_PERMISSION = 0;
     private static final int CONST_OPENVPN_PERMISSION2 = 1;
 
     // Views
+    Button buttonUserId;
     TextView textStatus;
-    Button buttonFindCloudlet;
-    Button buttonDisconnectCloudlet;
+    Button buttonFindCloudlet, buttonDisconnectCloudlet;
     Button buttonStartVpn, buttonEndVpn;
     CheckBox checkBoxProfile;
     TextView textNotify;
 
     // Service for cloudlet functionalities
     private ICloudletService mCloudletService = null;
-    private boolean isCloudletServiceConnected = false;
+    private boolean isCloudletServiceInitiated = false;
+    private boolean isCloudletServiceReady = false;
     private String profileUuid;
 
     // Service for OpenVPN client control; used only for registering app
     private IOpenVPNAPIService mVpnService = null;
+
+    // Shared preferences
+    SharedPreferences sharedPref;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,24 +77,28 @@ public class MainActivity extends Activity {
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON+
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        // Get views
+        getViews();
+
+        checkBoxProfile.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                updateServiceStatus();
+                try {
+                    mCloudletService.useTestProfile(isChecked);
+                } catch (RemoteException e) {}
+            }
+        });
+    }
+
+    private void getViews() {
         textStatus = (TextView) findViewById(R.id.text_status);
+        buttonUserId = (Button) findViewById(R.id.button_set_user_id);
         buttonFindCloudlet = (Button) findViewById(R.id.button_find_cloudlet);
         buttonDisconnectCloudlet = (Button) findViewById(R.id.button_disconnect_cloudlet);
         buttonStartVpn = (Button) findViewById(R.id.button_start_vpn);
         buttonEndVpn = (Button) findViewById(R.id.button_end_vpn);
         checkBoxProfile = (CheckBox) findViewById(R.id.checkbox_profile);
         textNotify = (TextView) findViewById(R.id.text_notify);
-
-        checkBoxProfile.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                updateProfileUuid();
-                try {
-                    mCloudletService.useTestProfile(isChecked);
-                } catch (RemoteException e) {}
-            }
-        });
     }
 
     @Override
@@ -105,12 +120,17 @@ public class MainActivity extends Activity {
             intentVpnService.setPackage("de.blinkt.openvpn");
             bindService(intentVpnService, mVpnConnection, Context.BIND_AUTO_CREATE);
         }
+
+        // Retrieve user ID
+        sharedPref = this.getPreferences(Context.MODE_PRIVATE);
+        userId = sharedPref.getString("user_id", userId);
+        buttonUserId.setText(userId);
     }
 
     @Override
     protected void onPause() {
         Log.v(LOG_TAG, "++onPause");
-        super.onDestroy();
+        super.onPause();
     }
 
     @Override
@@ -122,7 +142,8 @@ public class MainActivity extends Activity {
             } catch (RemoteException e) {}
         }
         unbindService(mCloudletConnection);
-        isCloudletServiceConnected = false;
+        isCloudletServiceInitiated = false;
+        isCloudletServiceReady = false;
 
         Log.v(LOG_TAG, "++onDestroy");
         super.onDestroy();
@@ -131,14 +152,49 @@ public class MainActivity extends Activity {
 
     /***** Begin handling button events ***********************************************************/
 
+    // Called when the "set_user_id" button is clicked
+    public void setUserId(View view) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Insert user name");
+
+        // Set up the input
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        builder.setView(input);
+
+        // Set up the buttons
+        builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                userId = input.getText().toString();
+                buttonUserId.setText(userId);
+
+                // commit
+                SharedPreferences.Editor editor = sharedPref.edit();
+                editor.putString("user_id", userId);
+                editor.commit();
+
+                try {
+                    mCloudletService.setUserId(userId);
+                } catch (RemoteException e) {}
+            }
+        });
+        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.cancel();
+            }
+        });
+
+        builder.show();
+    }
+
     // Called when the "start_openvpn" button is clicked
     public void startOpenVpn(View view) {
-        if (mCloudletService != null) {
-            try {
-                mCloudletService.startOpenVpn();
-            } catch (RemoteException e) {
-                Log.e(LOG_TAG, "Error in getting cloudlet IP");
-            }
+        try {
+            mCloudletService.startOpenVpn();
+        } catch (RemoteException e) {
+            Log.e(LOG_TAG, "Error in starting Vpn" + e.getMessage());
         }
     }
 
@@ -148,7 +204,7 @@ public class MainActivity extends Activity {
             try {
                 mCloudletService.endOpenVpn();
             } catch (RemoteException e) {
-                Log.e(LOG_TAG, "Error in getting cloudlet IP");
+                Log.e(LOG_TAG, "Error in ending Vpn" + e.getMessage());
             }
         }
     }
@@ -184,6 +240,11 @@ public class MainActivity extends Activity {
             msg.obj = message;
             mHandler.sendMessage(msg);
         }
+        public void amReady() throws RemoteException {
+            Message msg = Message.obtain();
+            msg.what = MSG_READY;
+            mHandler.sendMessage(msg);
+        }
         public void newServerIP(String IP_addr) throws RemoteException {
             Message msg = Message.obtain();
             msg.what = MSG_STATUS;
@@ -199,8 +260,6 @@ public class MainActivity extends Activity {
             mCloudletService = ICloudletService.Stub.asInterface(service);
             try {
                 mCloudletService.registerCallback(mCallback);
-
-                updateProfileUuid();
             } catch (RemoteException e) {
                 Log.e(LOG_TAG, "Error in registering callback to cloudlet service");
             }
@@ -224,7 +283,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void updateProfileUuid() {
+    private void updateServiceStatus() {
         try {
             profileUuid = mCloudletService.getVpnProfileUuid();
             if (!checkBoxProfile.isChecked() && profileUuid == null) {
@@ -287,11 +346,6 @@ public class MainActivity extends Activity {
                 } catch (RemoteException e) {
                     Log.e(LOG_TAG, "Error in VPN service call 'prepareVPNService'");
                 }
-
-//                Message msg = Message.obtain();
-//                msg.what = MSG_STATUS;
-//                msg.obj = "Cloudlet Launcher successfully gained control over OpenVPN client";
-//                mHandler.sendMessage(msg);
             } else {
                 Log.w(LOG_TAG, "The user hasn't permitted this app to control OpenVPN client");
 
@@ -304,13 +358,19 @@ public class MainActivity extends Activity {
         if (requestCode == CONST_OPENVPN_PERMISSION2) {
             if (resultCode == Activity.RESULT_OK) {
                 // Bind to the Cloudlet service
-                if (!isCloudletServiceConnected) {
+                if (!isCloudletServiceInitiated) {
                     Intent intentCloudletService = new Intent(ICloudletService.class.getName());
                     intentCloudletService.setPackage("edu.cmu.cs.elijah.cloudletlauncher");
                     bindService(intentCloudletService, mCloudletConnection, Context.BIND_AUTO_CREATE);
-                    isCloudletServiceConnected = true;
+                    isCloudletServiceInitiated = true;
                 } else {
-                    updateProfileUuid();
+                    if (isCloudletServiceReady) { // need this check because here may be reached before connection is established/ready
+                        updateServiceStatus();
+
+                        try {
+                            mCloudletService.setUserId(userId);
+                        } catch (RemoteException e) {}
+                    }
                 }
 
                 unbindService(mVpnConnection);
@@ -322,6 +382,15 @@ public class MainActivity extends Activity {
         public void handleMessage(Message msg) {
             if (msg.what == MSG_STATUS) {
                 textStatus.setText((CharSequence) msg.obj);
+            }
+            if (msg.what == MSG_READY) {
+                updateServiceStatus();
+
+                try {
+                    mCloudletService.setUserId(userId);
+                } catch (RemoteException e) {}
+
+                isCloudletServiceReady = true;
             }
         }
     };

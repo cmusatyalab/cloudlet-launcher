@@ -42,7 +42,7 @@ public class CloudletService extends Service {
     private static final String LOG_TAG = "CloudletService";
 
     // User info
-    private String userId = "";
+    private String userId = "unknown";
 
     // Cloudlet info
     private String cloudletIP = "8.225.186.10";
@@ -79,15 +79,6 @@ public class CloudletService extends Service {
         intentVpnService.setPackage("de.blinkt.openvpn");
 
         bindService(intentVpnService, mConnection, Context.BIND_AUTO_CREATE);
-
-        // Get user (device) ID from file
-        try {
-            File idFile = new File(Environment.getExternalStorageDirectory(), "/CloudletLauncher/id.txt");
-            BufferedReader reader = new BufferedReader(new FileReader(idFile));
-            userId = reader.readLine();
-        } catch (IOException e) {
-            Log.e(LOG_TAG, "Error reading ID file: " + e.getMessage());
-        }
     }
 
     @Override
@@ -113,6 +104,10 @@ public class CloudletService extends Service {
     }
 
     private final ICloudletService.Stub mBinder = new ICloudletService.Stub() {
+        public boolean isServiceReady() {
+            return isVpnServiceReady;
+        }
+
         public String getVpnProfileUuid() {
             List<APIVpnProfile> profileList = null;
             try {
@@ -128,6 +123,10 @@ public class CloudletService extends Service {
 
         public void useTestProfile(boolean flag) {
             isUsingTestProfile = flag;
+        }
+
+        public void setUserId(String userId) {
+            userId = userId;
         }
 
         public void startOpenVpn() {

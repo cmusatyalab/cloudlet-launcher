@@ -9,6 +9,7 @@
     <string name="title_api">Public APIs</string>
     <string name="title_debug">Debug Only</string>
 
+    <string name="user_id_description">Your user name is:</string>
     <string name="start_openvpn">Start VPN</string>
     <string name="end_openvpn">End VPN</string>
     <string name="find_cloudlet">Find cloudlet</string>

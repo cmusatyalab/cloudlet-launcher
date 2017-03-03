@@ -8,4 +8,5 @@ package edu.cmu.cs.elijah.cloudletlauncher.api;
 oneway interface ICloudletServiceCallback {
     void message(String message);
     void newServerIP(String ipAddr);
+    void amReady();
 }

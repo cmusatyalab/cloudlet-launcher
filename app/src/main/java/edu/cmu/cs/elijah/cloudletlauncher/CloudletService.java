@@ -7,7 +7,6 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
@@ -17,8 +16,6 @@ import android.util.Log;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -85,8 +82,8 @@ public class CloudletService extends Service {
     public void onDestroy() {
         if (mVpnService != null) {
             try {
-                mVpnService.unregisterStatusCallback(mCallback);
                 mVpnService.disconnect();
+                mVpnService.unregisterStatusCallback(mCallback);
                 isVpnServiceReady = false;
             } catch (SecurityException e) {
             } catch (RemoteException e) {}
@@ -125,8 +122,8 @@ public class CloudletService extends Service {
             isUsingTestProfile = flag;
         }
 
-        public void setUserId(String userId) {
-            userId = userId;
+        public void setUserId(String id) {
+            userId = id;
         }
 
         public void startOpenVpn() {
@@ -156,6 +153,11 @@ public class CloudletService extends Service {
 
         public void registerCallback(ICloudletServiceCallback cb) {
             callbackList.register(cb);
+            if (isServiceReady()) {
+                try {
+                    cb.amReady();
+                } catch (RemoteException e) {}
+            }
             Log.d(LOG_TAG, "Callback from other apps registered");
         }
 
@@ -295,6 +297,7 @@ public class CloudletService extends Service {
         }
         return response.toString();
     }
+    /***** End handling http connections **********************************************************/
 
     /***** Begin handling connection to OpenVPN service *******************************************/
     private void connectVpn() {
@@ -409,6 +412,17 @@ public class CloudletService extends Service {
                 mVpnService.registerStatusCallback(mCallback);
                 isVpnServiceReady = true;
                 Log.i(LOG_TAG, "Connected to OpenVPN service and callback registered");
+
+                // Tell all the apps that "I'm ready"
+                int n = callbackList.beginBroadcast();
+                for(int i = 0; i < n; i++) {
+                    try {
+                        callbackList.getBroadcastItem(i).amReady();
+                    } catch (RemoteException e) {
+                        // RemoteCallbackList will take care of removing dead objects
+                    }
+                }
+                callbackList.finishBroadcast();
             } catch (SecurityException e) {
                 Log.w(LOG_TAG, "The cloudletlauncher needs to register to OpenVPN client first!");
             } catch (RemoteException e) {
@@ -435,21 +449,6 @@ public class CloudletService extends Service {
             }
         }
         callbackList.finishBroadcast();
-    }
-
-    private boolean checkVpnService() {
-        if (!isVpnServiceReady) {
-            try {
-                mVpnService.registerStatusCallback(mCallback);
-                isVpnServiceReady = true;
-                Log.i(LOG_TAG, "OpenVPN callback registered");
-            } catch (SecurityException e) {
-                Log.w(LOG_TAG, "The cloudletlauncher needs to register to OpenVPN client first!");
-            } catch (RemoteException e) {
-                Log.e(LOG_TAG, "Error in registering callback to OpenVPN service: " + e.getMessage());
-            }
-        }
-        return isVpnServiceReady;
     }
     /***** End helper functions *******************************************************************/
 

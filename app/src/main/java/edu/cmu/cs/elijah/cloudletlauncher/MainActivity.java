@@ -30,7 +30,6 @@ import edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletService;
 import edu.cmu.cs.elijah.cloudletlauncher.api.ICloudletServiceCallback;
 
 public class MainActivity extends Activity {
-
     private static final String LOG_TAG = "MainActivity";
 
     // Application ID
@@ -82,7 +81,7 @@ public class MainActivity extends Activity {
         checkBoxProfile.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                updateServiceStatus();
+                checkVpnProfile();
                 try {
                     mCloudletService.useTestProfile(isChecked);
                 } catch (RemoteException e) {}
@@ -200,34 +199,28 @@ public class MainActivity extends Activity {
 
     // Called when the "end_openvpn" button is clicked
     public void endOpenVpn(View view) {
-        if (mCloudletService != null) {
-            try {
-                mCloudletService.endOpenVpn();
-            } catch (RemoteException e) {
-                Log.e(LOG_TAG, "Error in ending Vpn" + e.getMessage());
-            }
+        try {
+            mCloudletService.endOpenVpn();
+        } catch (RemoteException e) {
+            Log.e(LOG_TAG, "Error in ending Vpn" + e.getMessage());
         }
     }
 
     // Called when the "find_cloudlet" button is clicked
     public void findCloudlet(View view) {
-        if (mCloudletService != null) {
-            try {
-                mCloudletService.findCloudlet(appId);
-            } catch (RemoteException e) {
-                Log.e(LOG_TAG, "Error in getting cloudlet IP");
-            }
+        try {
+            mCloudletService.findCloudlet(appId);
+        } catch (RemoteException e) {
+            Log.e(LOG_TAG, "Error in getting cloudlet IP");
         }
     }
 
     // Called when the "disconnect_from_cloudlet" button is clicked
     public void disconnectCloudlet(View view) {
-        if (mCloudletService != null) {
-            try {
-                mCloudletService.disconnectCloudlet(appId);
-            } catch (RemoteException e) {
-                Log.e(LOG_TAG, "Error in disconnecting VPN service");
-            }
+        try {
+            mCloudletService.disconnectCloudlet(appId);
+        } catch (RemoteException e) {
+            Log.e(LOG_TAG, "Error in disconnecting VPN service");
         }
     }
     /***** End handling button events *************************************************************/
@@ -283,7 +276,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void updateServiceStatus() {
+    private void checkVpnProfile() {
         try {
             profileUuid = mCloudletService.getVpnProfileUuid();
             if (!checkBoxProfile.isChecked() && profileUuid == null) {
@@ -365,7 +358,7 @@ public class MainActivity extends Activity {
                     isCloudletServiceInitiated = true;
                 } else {
                     if (isCloudletServiceReady) { // need this check because here may be reached before connection is established/ready
-                        updateServiceStatus();
+                        checkVpnProfile();
 
                         try {
                             mCloudletService.setUserId(userId);
@@ -384,7 +377,7 @@ public class MainActivity extends Activity {
                 textStatus.setText((CharSequence) msg.obj);
             }
             if (msg.what == MSG_READY) {
-                updateServiceStatus();
+                checkVpnProfile();
 
                 try {
                     mCloudletService.setUserId(userId);

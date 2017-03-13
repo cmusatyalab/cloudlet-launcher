@@ -58,7 +58,6 @@ public class MainActivity extends Activity {
     private ICloudletService mCloudletService = null;
     private boolean isCloudletServiceInitiated = false;
     private boolean isCloudletServiceReady = false;
-    private String profileUuid;
 
     // Service for OpenVPN client control; used only for registering app
     private IOpenVPNAPIService mVpnService = null;
@@ -278,8 +277,7 @@ public class MainActivity extends Activity {
 
     private void checkVpnProfile() {
         try {
-            profileUuid = mCloudletService.getVpnProfileUuid();
-            if (!checkBoxProfile.isChecked() && profileUuid == null) {
+            if (!checkBoxProfile.isChecked() && !mCloudletService.isProfileReady()) {
                 textNotify.setText("Please create a profile named \"cloudlet\" in OpenVPN first");
                 textNotify.setVisibility(View.VISIBLE);
 

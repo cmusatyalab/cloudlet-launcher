@@ -105,17 +105,8 @@ public class CloudletService extends Service {
             return isVpnServiceReady;
         }
 
-        public String getVpnProfileUuid() {
-            List<APIVpnProfile> profileList = null;
-            try {
-                profileList = mVpnService.getProfiles();
-            } catch (RemoteException e) {}
-
-            for (APIVpnProfile p : profileList) {
-                Log.d(LOG_TAG, "New profile item. UUID: " + p.mUUID + ", name: " + p.mName);
-                if (p.mName.equals("cloudlet")) return p.mUUID;
-            }
-            return null;
+        public boolean isProfileReady() {
+            return (getVpnProfileUuid() != null);
         }
 
         public void useTestProfile(boolean flag) {
@@ -449,6 +440,19 @@ public class CloudletService extends Service {
             }
         }
         callbackList.finishBroadcast();
+    }
+
+    private String getVpnProfileUuid() {
+        List<APIVpnProfile> profileList = null;
+        try {
+            profileList = mVpnService.getProfiles();
+        } catch (RemoteException e) {}
+
+        for (APIVpnProfile p : profileList) {
+            Log.d(LOG_TAG, "New profile item. UUID: " + p.mUUID + ", name: " + p.mName);
+            if (p.mName.equals("cloudlet")) return p.mUUID;
+        }
+        return null;
     }
     /***** End helper functions *******************************************************************/
 

@@ -31,6 +31,9 @@ import java.util.TimerTask;
 
 import javax.net.ssl.HttpsURLConnection;
 
+import org.json.JSONObject;
+import org.json.JSONException;
+
 import de.blinkt.openvpn.api.APIVpnProfile;
 import de.blinkt.openvpn.api.IOpenVPNAPIService;
 import de.blinkt.openvpn.api.IOpenVPNStatusCallback;
@@ -46,19 +49,21 @@ public class CloudletService extends Service {
     // Cloudlet info
     private String cloudletIP = "orangebox72.elijah.cs.cmu.edu";
     private int cloudletPort = 2000;
+    private String overlayURL = "http://172.27.72.1:5240/MAAS/images-stream/custom/amd64/generic/lego-overlay-zip/20171128/root-dd.raw";
     private String vmIp = "";
 
     // Message types
     private static final int MSG_POST_DONE = 0;
     private static final int MSG_GET_DONE = 1;
     private static final int MSG_VPN_CONNECTED = 2;
+    private static final int MSG_DELETE_DONE = 3;
 
     // OpenVPN connection
     private IOpenVPNAPIService mVpnService = null;
     private boolean isVpnServiceReady = false;
     private Object vpnLock = new Object();
     private int vpnConnectionCounter = 0;
-    private String profileUuid = null;
+    private String vpnConfig = null;
     private boolean isUsingTestProfile = false;
 
     // Callbacks
@@ -108,7 +113,7 @@ public class CloudletService extends Service {
         }
 
         public boolean isProfileReady() {
-            return (getVpnProfileUuid() != null);
+            return true;
         }
 
         public void useTestProfile(boolean flag) {
@@ -121,27 +126,25 @@ public class CloudletService extends Service {
 
         public void startOpenVpn() {
             isTesting = true;
-            profileUuid = getVpnProfileUuid();
-            connectVpn();
+            if (vpnConfig != null) {
+                connectVpn();
+            }
         }
 
         public void endOpenVpn() {
             isTesting = false;
-            profileUuid = getVpnProfileUuid();
             disconnectVpn();
         }
 
         public void findCloudlet(String appId) {
             Log.d(LOG_TAG, "++findCloudlet");
-            profileUuid = getVpnProfileUuid();
-            new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "create", appId, userId);
+            new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, appId, userId, overlayURL);
         };
 
         public void disconnectCloudlet(String appId) {
             Log.d(LOG_TAG, "++disconnectCloudlet");
-            profileUuid = getVpnProfileUuid();
             disconnectVpn();
-            new SendPostRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, "delete", appId, userId);
+            new SendDeleteRequestAsync().execute("http://" + cloudletIP + ":" + cloudletPort, appId, userId);
         };
 
         public void registerCallback(ICloudletServiceCallback cb) {
@@ -165,21 +168,23 @@ public class CloudletService extends Service {
     private class PostMsgWrapper
     {
         public String response;
-        public String action;
         public String appId;
         public String userId;
+        public String overlay;
     }
 
     private String sendPostRequest(String... paras) {
         Log.v(LOG_TAG, "POST " + paras[0]);
         try {
             URL url = new URL(paras[0]); // here is your URL path
-            String action = paras[1];
-            String appId = paras[2];
-            String userId = paras[3];
+            String appId = paras[1];
+            String userId = paras[2];
+            String overlayURL = paras[3];
 
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setReadTimeout(15000 /* milliseconds */);
+            // Use a read timeout of 150 seconds, since the VM will be
+            // spawned during the POST request itself.
+            conn.setReadTimeout(150000 /* milliseconds */);
             conn.setConnectTimeout(15000 /* milliseconds */);
             conn.setRequestMethod("POST");
             conn.setDoOutput(true);
@@ -187,7 +192,73 @@ public class CloudletService extends Service {
             Uri.Builder builder = new Uri.Builder()
                     .appendQueryParameter("user_id", userId)
                     .appendQueryParameter("app_id", appId)
-                    .appendQueryParameter("action", action);
+                    .appendQueryParameter("overlay", overlayURL);
+            String query = builder.build().getEncodedQuery();
+
+            OutputStream os = conn.getOutputStream();
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
+            writer.write(query);
+            writer.flush();
+            writer.close();
+            os.close();
+
+            int responseCode = conn.getResponseCode();
+            String serverResponse = "";
+            try {
+                serverResponse = readStream(conn.getInputStream());
+            } catch(FileNotFoundException fnfe) { }
+
+            if (responseCode == HttpsURLConnection.HTTP_CREATED) {
+                return serverResponse;
+            }
+            else {
+                Log.e(LOG_TAG, "Server returned error response ["+ responseCode + "]: " + serverResponse);
+            }
+        }
+        catch(Exception e){
+            Log.e(LOG_TAG, "Error in sending POST message: ", e);
+        }
+        return null;
+    }
+
+    public class SendPostRequestAsync extends AsyncTask<String, Void, PostMsgWrapper> {
+        @Override
+        protected PostMsgWrapper doInBackground(String... paras) {
+            PostMsgWrapper p = new PostMsgWrapper();
+            p.response = sendPostRequest(paras);
+            p.appId = paras[1];
+            p.userId = paras[2];
+            p.overlay = paras[3];
+            return p;
+        }
+
+        @Override
+        protected void onPostExecute(PostMsgWrapper p) {
+            if (p.response != null) {
+                Message msg = Message.obtain();
+                msg.what = MSG_POST_DONE;
+                msg.obj = p;
+                mHandler.sendMessage(msg);
+            }
+        }
+    }
+
+    private String sendDeleteRequest(String... paras) {
+        Log.v(LOG_TAG, "DELETE " + paras[0]);
+        try {
+            URL url = new URL(paras[0]); // here is your URL path
+            String appId = paras[1];
+            String userId = paras[2];
+
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setReadTimeout(15000 /* milliseconds */);
+            conn.setConnectTimeout(15000 /* milliseconds */);
+            conn.setRequestMethod("DELETE");
+            conn.setDoOutput(true);
+
+            Uri.Builder builder = new Uri.Builder()
+                    .appendQueryParameter("user_id", userId)
+                    .appendQueryParameter("app_id", appId);
             String query = builder.build().getEncodedQuery();
 
             OutputStream os = conn.getOutputStream();
@@ -211,19 +282,18 @@ public class CloudletService extends Service {
             }
         }
         catch(Exception e){
-            Log.e(LOG_TAG, "Error in sending POST message: ", e);
+            Log.e(LOG_TAG, "Error in sending DELETE message: ", e);
         }
         return null;
     }
 
-    public class SendPostRequestAsync extends AsyncTask<String, Void, PostMsgWrapper> {
+    public class SendDeleteRequestAsync extends AsyncTask<String, Void, PostMsgWrapper> {
         @Override
         protected PostMsgWrapper doInBackground(String... paras) {
             PostMsgWrapper p = new PostMsgWrapper();
-            p.response = sendPostRequest(paras);
-            p.action = paras[1];
-            p.appId = paras[2];
-            p.userId = paras[3];
+            p.response = sendDeleteRequest(paras);
+            p.appId = paras[1];
+            p.userId = paras[2];
             return p;
         }
 
@@ -231,7 +301,7 @@ public class CloudletService extends Service {
         protected void onPostExecute(PostMsgWrapper p) {
             if (p.response != null) {
                 Message msg = Message.obtain();
-                msg.what = MSG_POST_DONE;
+                msg.what = MSG_DELETE_DONE;
                 msg.obj = p;
                 mHandler.sendMessage(msg);
             }
@@ -356,10 +426,10 @@ public class CloudletService extends Service {
                     }
                 }
             } else {
-                // Start connection using pre-registered user profile
+                // Start connection using the dynamic VPN config.
                 if (mVpnService != null) {
                     try {
-                        mVpnService.startProfile(profileUuid);
+                        mVpnService.startVPN(vpnConfig);
                     } catch (RemoteException e) {
                         Log.e(LOG_TAG, "Error in starting VPN connection: " + e.getMessage());
                     }
@@ -459,29 +529,21 @@ public class CloudletService extends Service {
         callbackList.finishBroadcast();
     }
 
-    private String getVpnProfileUuid() {
-        List<APIVpnProfile> profileList = null;
-        try {
-            profileList = mVpnService.getProfiles();
-        } catch (RemoteException e) {}
-
-        for (APIVpnProfile p : profileList) {
-            Log.d(LOG_TAG, "New profile item. UUID: " + p.mUUID + ", name: " + p.mName);
-            if (p.mName.equals("cloudlet")) return p.mUUID;
-        }
-        return null;
-    }
     /***** End helper functions *******************************************************************/
 
     private Handler mHandler = new Handler() {
         public void handleMessage(Message msg) {
             if (msg.what == MSG_POST_DONE) {
                 PostMsgWrapper p = (PostMsgWrapper) msg.obj;
-                if (p.action.equals("create")) {
-                    final Timer pollingTimer = new Timer();
-                    StatusCheckTask pollingTask = new StatusCheckTask(p.userId, p.appId, pollingTimer);
-                    pollingTimer.schedule(pollingTask, 10000, 3000);
+                try {
+                    JSONObject result = new JSONObject(p.response);
+                    vpnConfig = result.getString("vpn");
+                    vmIp = result.getString("ip");
+                } catch (JSONException e) {
+                    Log.e(LOG_TAG, "Error processing the response: " + e.getMessage());
                 }
+
+                connectVpn();
             }
             if (msg.what == MSG_VPN_CONNECTED) {
                 if (isTesting) {

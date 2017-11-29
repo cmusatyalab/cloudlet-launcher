@@ -16,6 +16,8 @@ import android.util.Log;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -42,8 +44,8 @@ public class CloudletService extends Service {
     private String userId = "unknown";
 
     // Cloudlet info
-    private String cloudletIP = "8.225.186.10";
-    private int cloudletPort = 9127;
+    private String cloudletIP = "orangebox72.elijah.cs.cmu.edu";
+    private int cloudletPort = 2000;
     private String vmIp = "";
 
     // Message types
@@ -169,6 +171,7 @@ public class CloudletService extends Service {
     }
 
     private String sendPostRequest(String... paras) {
+        Log.v(LOG_TAG, "POST " + paras[0]);
         try {
             URL url = new URL(paras[0]); // here is your URL path
             String action = paras[1];
@@ -195,14 +198,20 @@ public class CloudletService extends Service {
             os.close();
 
             int responseCode = conn.getResponseCode();
+            String serverResponse = "";
+            try {
+                serverResponse = readStream(conn.getInputStream());
+            } catch(FileNotFoundException fnfe) { }
 
             if (responseCode == HttpsURLConnection.HTTP_OK) {
-                String serverResponse = readStream(conn.getInputStream());
                 return serverResponse;
+            }
+            else {
+                Log.e(LOG_TAG, "Server returned error response ["+ responseCode + "]: " + serverResponse);
             }
         }
         catch(Exception e){
-            Log.e(LOG_TAG, "Error in sending POST message: " + e.getMessage());
+            Log.e(LOG_TAG, "Error in sending POST message: ", e);
         }
         return null;
     }
@@ -231,6 +240,7 @@ public class CloudletService extends Service {
 
 
     private String sendGetRequest(String... paras) {
+        Log.v(LOG_TAG, "GET " + paras[0]);
         try {
             URL url = new URL(paras[0]);
 
@@ -240,12 +250,19 @@ public class CloudletService extends Service {
 
             int responseCode = conn.getResponseCode();
 
+            String serverResponse = "";
+            try {
+                serverResponse = readStream(conn.getInputStream());
+            } catch(FileNotFoundException fnfe) { }
+
             if (responseCode == HttpURLConnection.HTTP_OK) {
-                String serverResponse = readStream(conn.getInputStream());
                 return serverResponse;
             }
+            else {
+                Log.e(LOG_TAG, "Server returned error response ["+ responseCode + "]: " + serverResponse);
+            }
         } catch (Exception e) {
-            Log.e(LOG_TAG, "Error in sending GET message: " + e.getMessage());
+            Log.e(LOG_TAG, "Error in sending GET message: ", e);
         }
 
         return null;
